@@ -1,6 +1,8 @@
 
 from datetime import datetime, timezone
+import logging
 from pathlib import Path
+import time
 import sqlite3
 
 import requests
@@ -8,6 +10,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(title="Kerala Climate Twin API")
+logger = logging.getLogger("kerala_climate_twin")
 
 app.add_middleware(
     CORSMiddleware,
@@ -96,33 +99,41 @@ def get_weather(district: str):
     params = {
         "latitude": latitude,
         "longitude": longitude,
-       "current": (
-    "temperature_2m,"
-    "relative_humidity_2m,"
-    "precipitation,"
-    "wind_speed_10m,"
-    "wind_direction_10m,"
-    "cloud_cover,"
-    "weather_code"
-),
-"hourly": (
-    "temperature_2m,"
-    "precipitation,"
-    "wind_speed_10m,"
-    "wind_direction_10m,"
-    "relative_humidity_2m,"
-    "cloud_cover"
-),        "forecast_days": 3,
+        "current": (
+            "temperature_2m,relative_humidity_2m,precipitation,"
+            "wind_speed_10m,wind_direction_10m,cloud_cover,weather_code"
+        ),
+        "hourly": (
+            "temperature_2m,precipitation,wind_speed_10m,"
+            "wind_direction_10m,relative_humidity_2m,cloud_cover"
+        ),
+        "forecast_days": 3,
         "timezone": "Asia/Kolkata",
     }
 
     try:
-        response = requests.get(
-            OPEN_METEO_URL,
-            params=params,
-            timeout=20,
-        )
-        response.raise_for_status()
+        response = None
+        for attempt in range(2):
+            try:
+                response = requests.get(
+                    OPEN_METEO_URL,
+                    params=params,
+                    headers={
+                        "Accept": "application/json",
+                        "User-Agent": "KeralaClimateTwin/1.0",
+                    },
+                    timeout=20,
+                )
+                response.raise_for_status()
+                break
+            except requests.RequestException:
+                if attempt == 1:
+                    raise
+                time.sleep(1)
+
+        if response is None:
+            raise requests.RequestException("No response from weather provider")
+
         payload = response.json()
 
         current = payload.get("current")
@@ -189,6 +200,11 @@ def get_weather(district: str):
         return result
 
     except requests.RequestException as exc:
+        logger.exception(
+            "Open-Meteo request failed for %s: %s",
+            matched_name,
+            exc,
+        )
         raise HTTPException(
             status_code=502,
             detail="Weather provider unavailable. Please retry.",
