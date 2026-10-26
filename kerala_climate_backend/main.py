@@ -200,14 +200,29 @@ def get_weather(district: str):
         return result
 
     except requests.RequestException as exc:
+        upstream_status = (
+            exc.response.status_code
+            if exc.response is not None
+            else "no response"
+        )
+        upstream_body = (
+            exc.response.text[:300]
+            if exc.response is not None
+            else str(exc)
+        )
         logger.exception(
-            "Open-Meteo request failed for %s: %s",
+            "Open-Meteo request failed for %s (status %s): %s",
             matched_name,
-            exc,
+            upstream_status,
+            upstream_body,
         )
         raise HTTPException(
             status_code=502,
-            detail="Weather provider unavailable. Please retry.",
+            detail=(
+                "Weather provider unavailable. "
+                f"Upstream status: {upstream_status}. "
+                f"Reason: {upstream_body}"
+            ),
         ) from exc
     except (ValueError, KeyError, TypeError) as exc:
         raise HTTPException(
