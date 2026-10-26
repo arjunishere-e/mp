@@ -1,5 +1,6 @@
 
 from datetime import datetime, timezone
+import json
 import logging
 from pathlib import Path
 import time
@@ -54,6 +55,13 @@ def initialise_database():
                 wind_speed_kmh REAL,
                 cloud_cover_percent REAL,
                 source TEXT NOT NULL
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS weather_cache (
+                district TEXT PRIMARY KEY,
+                payload TEXT NOT NULL,
+                fetched_at TEXT NOT NULL
             )
         """)
 
@@ -113,6 +121,7 @@ def get_weather(district: str):
 
     try:
         response = None
+        used_cache = False
         for attempt in range(2):
             try:
                 response = requests.get(
@@ -127,14 +136,28 @@ def get_weather(district: str):
                 response.raise_for_status()
                 break
             except requests.RequestException:
+                if (
+                    response is not None
+                    and response.status_code == 429
+                ):
+                    with sqlite3.connect(DB_PATH) as conn:
+                        cached = conn.execute(
+                            "SELECT payload FROM weather_cache WHERE district = ?",
+                            (matched_name,),
+                        ).fetchone()
+                    if cached is not None:
+                        payload = json.loads(cached[0])
+                        used_cache = True
+                        break
                 if attempt == 1:
                     raise
                 time.sleep(1)
 
-        if response is None:
+        if response is None and not used_cache:
             raise requests.RequestException("No response from weather provider")
 
-        payload = response.json()
+        if not used_cache:
+            payload = response.json()
 
         current = payload.get("current")
         if not isinstance(current, dict):
@@ -174,9 +197,23 @@ def get_weather(district: str):
             "attribution": "Weather data by Open-Meteo.com",
             "hourly": payload.get("hourly", {}),
             "wind_direction_degrees": current["wind_direction_10m"],
+            "cached": used_cache,
         }
 
         with sqlite3.connect(DB_PATH) as conn:
+            if not used_cache:
+                conn.execute(
+                    """
+                    INSERT OR REPLACE INTO weather_cache
+                    (district, payload, fetched_at)
+                    VALUES (?, ?, ?)
+                    """,
+                    (
+                        matched_name,
+                        json.dumps(payload),
+                        fetched_at,
+                    ),
+                )
             conn.execute("""
                 INSERT INTO weather_snapshots (
                     district, fetched_at, weather_time,
@@ -218,11 +255,8 @@ def get_weather(district: str):
         )
         raise HTTPException(
             status_code=502,
-            detail=(
-                "Weather provider unavailable. "
-                f"Upstream status: {upstream_status}. "
-                f"Reason: {upstream_body}"
-            ),
+            detail="Weather provider unavailable and no cached weather is available. "
+            "Please try again after the provider quota resets.",
         ) from exc
     except (ValueError, KeyError, TypeError) as exc:
         raise HTTPException(
