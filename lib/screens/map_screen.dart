@@ -7,7 +7,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 
-const String mapApiUrl = 'http://10.0.2.2:8000';
+const String mapApiUrl = 'https://mp-cjn5.onrender.com';
 const Color emerald = Color(0xFF00805F);
 const Color navy = Color(0xFF101B2D);
 

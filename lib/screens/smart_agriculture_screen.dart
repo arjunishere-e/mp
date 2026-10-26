@@ -6,7 +6,7 @@ import 'package:http/http.dart' as http;
 const _green = Color(0xFF087E75);
 const _navy = Color(0xFF102A43);
 const _muted = Color(0xFF627D98);
-const String _apiBaseUrl = 'http://10.0.2.2:8000';
+const String _apiBaseUrl = 'https://mp-cjn5.onrender.com';
 
 class SmartAgricultureScreen extends StatefulWidget {
   final String initialDistrict;

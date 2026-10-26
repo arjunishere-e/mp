@@ -15,7 +15,7 @@ const climateGreen = Color(0xFF087E75);
 const climateNavy = Color(0xFF102A43);
 const climateMuted = Color(0xFF627D98);
 
-const String apiBaseUrl = 'http://10.0.2.2:8000';
+const String apiBaseUrl = 'https://mp-cjn5.onrender.com';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});

@@ -1,11 +1,10 @@
-
 import 'dart:convert';
 
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
-const String historyApiUrl = 'http://10.0.2.2:8000';
+const String historyApiUrl = 'https://mp-cjn5.onrender.com';
 
 const Color climateGreen = Color(0xFF00805F);
 const Color climateNavy = Color(0xFF101B2D);
@@ -35,8 +34,7 @@ class HistoricalAnalysisScreen extends StatefulWidget {
       _HistoricalAnalysisScreenState();
 }
 
-class _HistoricalAnalysisScreenState
-    extends State<HistoricalAnalysisScreen> {
+class _HistoricalAnalysisScreenState extends State<HistoricalAnalysisScreen> {
   String selectedDistrict = 'Kochi';
 
   DateTime startDate = DateTime(2025, 1, 1);
@@ -82,19 +80,18 @@ class _HistoricalAnalysisScreenState
     });
 
     try {
-      final uri = Uri.parse(
-        '$historyApiUrl/api/climate/history/'
-        '${Uri.encodeComponent(selectedDistrict)}',
-      ).replace(
-        queryParameters: {
-          'start_date': dateString(startDate),
-          'end_date': dateString(endDate),
-        },
-      );
+      final uri =
+          Uri.parse(
+            '$historyApiUrl/api/climate/history/'
+            '${Uri.encodeComponent(selectedDistrict)}',
+          ).replace(
+            queryParameters: {
+              'start_date': dateString(startDate),
+              'end_date': dateString(endDate),
+            },
+          );
 
-      final response = await http
-          .get(uri)
-          .timeout(const Duration(seconds: 40));
+      final response = await http.get(uri).timeout(const Duration(seconds: 40));
 
       if (response.statusCode != 200) {
         String message = 'Unable to retrieve historical climate data.';
@@ -166,11 +163,7 @@ class _HistoricalAnalysisScreenState
     return number == null ? '--' : '${number.toStringAsFixed(1)}$unit';
   }
 
-  Widget summaryCard(
-    String title,
-    String value,
-    IconData icon,
-  ) {
+  Widget summaryCard(String title, String value, IconData icon) {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -194,10 +187,7 @@ class _HistoricalAnalysisScreenState
           const SizedBox(height: 5),
           Text(
             title,
-            style: const TextStyle(
-              fontSize: 12,
-              color: Colors.black54,
-            ),
+            style: const TextStyle(fontSize: 12, color: Colors.black54),
           ),
         ],
       ),
@@ -232,10 +222,7 @@ class _HistoricalAnalysisScreenState
           const SizedBox(height: 4),
           Text(
             subtitle,
-            style: const TextStyle(
-              color: Colors.black54,
-              fontSize: 12,
-            ),
+            style: const TextStyle(color: Colors.black54, fontSize: 12),
           ),
           const SizedBox(height: 20),
           SizedBox(height: 220, child: chart),
@@ -280,8 +267,8 @@ class _HistoricalAnalysisScreenState
               interval: records.length > 60
                   ? 30
                   : records.length > 20
-                      ? 7
-                      : 5,
+                  ? 7
+                  : 5,
               getTitlesWidget: (value, meta) {
                 final index = value.toInt();
                 if (index < 0 || index >= records.length) {
@@ -366,8 +353,8 @@ class _HistoricalAnalysisScreenState
               interval: records.length > 60
                   ? 30
                   : records.length > 20
-                      ? 7
-                      : 5,
+                  ? 7
+                  : 5,
               getTitlesWidget: (value, meta) {
                 final index = value.toInt();
                 if (index < 0 || index >= records.length) {
@@ -543,18 +530,12 @@ class _HistoricalAnalysisScreenState
               children: [
                 summaryCard(
                   'Average temperature',
-                  formatNumber(
-                    summary?['average_temperature_c'],
-                    ' °C',
-                  ),
+                  formatNumber(summary?['average_temperature_c'], ' °C'),
                   Icons.thermostat,
                 ),
                 summaryCard(
                   'Total precipitation',
-                  formatNumber(
-                    summary?['total_precipitation_mm'],
-                    ' mm',
-                  ),
+                  formatNumber(summary?['total_precipitation_mm'], ' mm'),
                   Icons.water_drop_outlined,
                 ),
                 summaryCard(
@@ -586,10 +567,7 @@ class _HistoricalAnalysisScreenState
                 'Source: Open-Meteo Historical Weather API. '
                 'ERA5 values are reanalysis estimates, not direct '
                 'measurements from local weather stations.',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: Colors.black54,
-                ),
+                style: TextStyle(fontSize: 11, color: Colors.black54),
               ),
             ),
           ],
