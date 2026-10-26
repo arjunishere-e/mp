@@ -22,6 +22,7 @@ app.add_middleware(
 
 DB_PATH = Path(__file__).with_name("climate.db")
 OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast"
+WEATHER_CACHE_TTL_SECONDS = 600
 
 DISTRICTS = {
     "Thiruvananthapuram": (8.5241, 76.9366),
@@ -119,10 +120,39 @@ def get_weather(district: str):
         "timezone": "Asia/Kolkata",
     }
 
+    response = None
+    used_cache = False
+    payload = None
+
+    with sqlite3.connect(DB_PATH) as conn:
+        cached = conn.execute(
+            """
+            SELECT payload, fetched_at
+            FROM weather_cache
+            WHERE district = ?
+            """,
+            (matched_name,),
+        ).fetchone()
+
+    if cached is not None:
+        try:
+            cached_at = datetime.fromisoformat(cached[1])
+            cache_age = (
+                datetime.now(timezone.utc) - cached_at
+            ).total_seconds()
+            if cache_age < WEATHER_CACHE_TTL_SECONDS:
+                payload = json.loads(cached[0])
+                used_cache = True
+        except (TypeError, ValueError, json.JSONDecodeError):
+            logger.warning(
+                "Ignoring invalid weather cache for %s",
+                matched_name,
+            )
+
     try:
-        response = None
-        used_cache = False
         for attempt in range(2):
+            if used_cache:
+                break
             try:
                 response = requests.get(
                     OPEN_METEO_URL,
@@ -136,18 +166,53 @@ def get_weather(district: str):
                 response.raise_for_status()
                 break
             except requests.RequestException:
-                if (
-                    response is not None
-                    and response.status_code == 429
-                ):
+                if response is not None and response.status_code == 429:
                     with sqlite3.connect(DB_PATH) as conn:
                         cached = conn.execute(
                             "SELECT payload FROM weather_cache WHERE district = ?",
                             (matched_name,),
                         ).fetchone()
+                        snapshot = conn.execute(
+                            """
+                            SELECT weather_time, temperature_c,
+                                   humidity_percent, precipitation_mm,
+                                   wind_speed_kmh, cloud_cover_percent
+                            FROM weather_snapshots
+                            WHERE district = ?
+                            ORDER BY id DESC
+                            LIMIT 1
+                            """,
+                            (matched_name,),
+                        ).fetchone()
                     if cached is not None:
-                        payload = json.loads(cached[0])
+                        try:
+                            payload = json.loads(cached[0])
+                            used_cache = True
+                            break
+                        except json.JSONDecodeError:
+                            logger.warning(
+                                "Ignoring invalid weather cache for %s",
+                                matched_name,
+                            )
+                    elif snapshot is not None:
+                        payload = {
+                            "current": {
+                                "time": snapshot[0],
+                                "temperature_2m": snapshot[1],
+                                "relative_humidity_2m": snapshot[2],
+                                "precipitation": snapshot[3],
+                                "wind_speed_10m": snapshot[4],
+                                "wind_direction_10m": None,
+                                "cloud_cover": snapshot[5],
+                                "weather_code": None,
+                            },
+                            "hourly": {},
+                        }
                         used_cache = True
+                        logger.warning(
+                            "Serving stale weather snapshot for %s",
+                            matched_name,
+                        )
                         break
                 if attempt == 1:
                     raise
@@ -168,9 +233,7 @@ def get_weather(district: str):
             "relative_humidity_2m",
             "precipitation",
             "wind_speed_10m",
-            "wind_direction_10m",
             "cloud_cover",
-            "weather_code",
             "time",
         ]
 
